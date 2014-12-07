@@ -29,7 +29,7 @@
 
 (defn parse-iso8601-to-epoch
   [s]
-  (.toEpochSecond (java.time.ZonedDateTime/parse s)))
+  (if s (.toEpochSecond (java.time.ZonedDateTime/parse s))))
 
 (defn mediawiki-to-pages
   "list of page elements from a <mediawiki> --- immediate children"

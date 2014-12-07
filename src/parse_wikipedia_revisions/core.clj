@@ -68,13 +68,14 @@
 
 (defn page-to-lines
   [pagetree]
-  (apply str (map (fn [m] (metadata-to-tsv-line m)) (page-to-revision-metadatas pagetree))))
+  (map metadata-to-tsv-line (page-to-revision-metadatas pagetree)))
 
 (defn process-xmlgz-to-tsv
   [xmlgz tsv]
   (with-open [w (clojure.java.io/writer tsv)]
-    (doseq [lines (map page-to-lines (mediawiki-to-pages (parse-xmlgz xmlgz)))]
-      (.write w lines))))
+    (doseq [lines (map (fn [p] (page-to-lines p)) (mediawiki-to-pages (parse-xmlgz xmlgz)))]
+      (doseq [line lines]
+        (.write w line)))))
 
 (defn -main
   [xmlgz tsv]

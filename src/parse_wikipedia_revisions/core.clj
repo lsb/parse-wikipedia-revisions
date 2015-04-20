@@ -52,7 +52,7 @@
 	username (first-child-content-of contributor :username)
 	userid (first-child-content-of contributor :id)
 	userip (first-child-content-of contributor :ip)]
-    [revid timestamp username userid userip]))
+    [revid timestamp (pr-str [username userid userip])]))
 
 (defn page-to-revision-metadatas
   [pagetree]

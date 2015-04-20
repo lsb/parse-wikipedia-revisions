@@ -56,11 +56,13 @@
 
 (defn page-to-revision-metadatas
   [pagetree]
-  (let [pageid (pull-id pagetree)
-        pagens (first-child-content-of pagetree :ns)]
-    (if (= pagens "0")
-      (map #(conj (revision-to-metadata %) pageid) (page-to-revisions pagetree))
-      [])))
+  (if (System/getenv "ONLYTEXT")
+    (map (fn [r] [(pull-id r) (pr-str (first-child-content-of r :text))]) (page-to-revisions pagetree))
+    (let [pageid (pull-id pagetree)
+          pagens (first-child-content-of pagetree :ns)]
+      (if (= pagens "0")
+        (map #(conj (revision-to-metadata %) pageid) (page-to-revisions pagetree))
+        []))))
 
 (defn metadata-to-tsv-line
   [vals]

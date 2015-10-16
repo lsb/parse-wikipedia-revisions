@@ -73,7 +73,7 @@
 (defn process-xmlgz-to-tsv
   [xmlgz tsv]
   (with-open [w (clojure.java.io/writer tsv)]
-    (doseq [lines (map (fn [p] (page-to-lines p)) (mediawiki-to-pages (parse-xmlgz xmlgz)))]
+    (doseq [lines (map page-to-lines (mediawiki-to-pages (parse-xmlgz xmlgz)))]
       (doseq [line lines]
         (.write w line)))))
 

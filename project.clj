@@ -1,4 +1,4 @@
-(defproject parse-wikipedia-revisions "0.2.0-SNAPSHOT"
+(defproject parse-wikipedia-revisions "0.3.0-SNAPSHOT"
   :description "Parse the Wikipedia stub-meta-history"
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}

@@ -6,12 +6,11 @@
 
 (def ONLYTEXT (System/getenv "ONLYTEXT"))
 
-(defn parse-xmlgz
-  "lazy-parse gzipped xml"
+(defn parse-xml
+  "lazy-parse xml"
   [filename]
   (-> filename
       (java.io.FileInputStream.)
-      (java.util.zip.GZIPInputStream.)
       (clojure.data.xml/parse)))
 
 (defn direct-children-of
@@ -68,23 +67,15 @@
         (map #(merge (revision-to-metadata %) {:page_id pageid, :title title}) (page-to-revisions pagetree))
         []))))
 
-(defn metadata-to-tsv-line
-  [vals]
-  (.concat (clojure.string/join "\t" vals) "\n"))
-
-(defn page-to-lines
-  [pagetree]
-  (map metadata-to-tsv-line (page-to-revision-metadatas pagetree)))
-
-(defn process-xmlgz-to-tsv
-  [xmlgz db]
+(defn process-xml-to-db
+  [xml db]
   (jdbc/with-db-connection [cnxn (str "jdbc:sqlite:" db)]
     (jdbc/with-db-transaction [txn cnxn]
-      (doseq [rows (map (fn [p] (page-to-revision-metadatas p)) (mediawiki-to-pages (parse-xmlgz xmlgz)))]
+      (doseq [rows (map (fn [p] (page-to-revision-metadatas p)) (mediawiki-to-pages (parse-xml xml)))]
         (doseq [row rows]
           (jdbc/insert! txn (if ONLYTEXT "revision_texts" "revisions") row :transaction? false))))))
 
 (defn -main
-  [xmlgz db]
-  (process-xmlgz-to-tsv xmlgz db))
+  [xml db]
+  (process-xml-to-db xml db))
 

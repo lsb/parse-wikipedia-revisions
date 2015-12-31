@@ -4,7 +4,7 @@ A Clojure library designed to parse stub-meta-history from Wikipedia
 
 ## Usage
 
-parse-wikipedia-revisions ....xml.gz ....tsv
+parse-wikipedia-revisions ....xml sqlite-db
 
 ## License
 

@@ -1,7 +1,10 @@
 (ns parse-wikipedia-revisions.core
-  (:require [clojure.data.xml])
+  (:require [clojure.data.xml]
+            [clojure.java.jdbc :as jdbc])
   (:gen-class)
 )
+
+(def ONLYTEXT (System/getenv "ONLYTEXT"))
 
 (defn parse-xmlgz
   "lazy-parse gzipped xml"
@@ -52,16 +55,17 @@
 	username (first-child-content-of contributor :username)
 	userid (first-child-content-of contributor :id)
 	userip (first-child-content-of contributor :ip)]
-    [revid timestamp (pr-str [username userid userip])]))
+    {:id revid, :epochsecond timestamp, :user (pr-str [username userid userip])} ))
 
 (defn page-to-revision-metadatas
   [pagetree]
-  (if (System/getenv "ONLYTEXT")
-    (map (fn [r] [(pull-id r) (pr-str (first-child-content-of r :text))]) (page-to-revisions pagetree))
+  (if ONLYTEXT
+    (map (fn [r] {:id (pull-id r) :txt (first-child-content-of r :text)}) (page-to-revisions pagetree))
     (let [pageid (pull-id pagetree)
+          title (first-child-content-of pagetree :title)
           pagens (first-child-content-of pagetree :ns)]
       (if (= pagens "0")
-        (map #(conj (revision-to-metadata %) pageid) (page-to-revisions pagetree))
+        (map #(merge (revision-to-metadata %) {:page_id pageid, :title title}) (page-to-revisions pagetree))
         []))))
 
 (defn metadata-to-tsv-line
@@ -73,12 +77,14 @@
   (map metadata-to-tsv-line (page-to-revision-metadatas pagetree)))
 
 (defn process-xmlgz-to-tsv
-  [xmlgz tsv]
-  (with-open [w (clojure.java.io/writer tsv)]
-    (doseq [lines (map page-to-lines (mediawiki-to-pages (parse-xmlgz xmlgz)))]
-      (doseq [line lines]
-        (.write w line)))))
+  [xmlgz db]
+  (jdbc/with-db-connection [cnxn (str "jdbc:sqlite:" db)]
+    (jdbc/with-db-transaction [txn cnxn]
+      (doseq [rows (map (fn [p] (page-to-revision-metadatas p)) (mediawiki-to-pages (parse-xmlgz xmlgz)))]
+        (doseq [row rows]
+          (jdbc/insert! txn (if ONLYTEXT "revision_texts" "revisions") row :transaction? false))))))
 
 (defn -main
-  [xmlgz tsv]
-  (process-xmlgz-to-tsv xmlgz tsv))
+  [xmlgz db]
+  (process-xmlgz-to-tsv xmlgz db))
+

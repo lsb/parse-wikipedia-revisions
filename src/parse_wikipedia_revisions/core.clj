@@ -1,17 +1,8 @@
 (ns parse-wikipedia-revisions.core
   (:require [clojure.data.xml]
-            [clojure.java.jdbc :as jdbc])
+            [clojure.data.json :as json])
   (:gen-class)
 )
-
-(def ONLYTEXT (System/getenv "ONLYTEXT"))
-
-(defn parse-xml
-  "lazy-parse xml"
-  [filename]
-  (-> filename
-      (java.io.FileInputStream.)
-      (clojure.data.xml/parse)))
 
 (defn direct-children-of
   "css: %1 > %2"
@@ -21,26 +12,16 @@
 (defn first-content-of
   "$('a').html()"
   [nodes]
-  (let [[node] (take 1 nodes)
-        [inner-text] (:content node)]
-    inner-text))
+  (first (:content (first nodes))))
 
 (defn first-child-content-of
   [node tag]
   (first-content-of (direct-children-of node tag)))
 
-(defn parse-iso8601-to-epoch
-  [s]
-  (if s (.toEpochSecond (java.time.ZonedDateTime/parse s))))
-
 (defn mediawiki-to-pages
   "list of page elements from a <mediawiki> --- immediate children"
   [mediawikitree]
   (direct-children-of mediawikitree :page))
-
-(defn pull-id
-  [tree]
-  (Long. (first-child-content-of tree :id)))
 
 (defn page-to-revisions
   [pagetree]
@@ -49,33 +30,36 @@
 (defn revision-to-metadata
   [revision]
   (let [revid (first-child-content-of revision :id)
-        timestamp (parse-iso8601-to-epoch (first-child-content-of revision :timestamp))
+        timestamp (first-child-content-of revision :timestamp)
 	contributor (first (direct-children-of revision :contributor))
+        text (first-child-content-of revision :text)
 	username (first-child-content-of contributor :username)
 	userid (first-child-content-of contributor :id)
 	userip (first-child-content-of contributor :ip)]
-    {:id revid, :epochsecond timestamp, :user (pr-str [username userid userip])} ))
+    {:id revid,
+     :timestamp timestamp,
+     :text text,
+     :user_name username,
+     :user_id userid,
+     :user_ip userip}))
+
+(defn revision-metadata-with-page-metadata
+  "Merge page metadata into revisions'."
+  [page-metadata revisions]
+  (map #(merge (revision-to-metadata %) page-metadata) revisions))
 
 (defn page-to-revision-metadatas
   [pagetree]
-  (if ONLYTEXT
-    (map (fn [r] {:id (pull-id r) :txt (first-child-content-of r :text)}) (page-to-revisions pagetree))
-    (let [pageid (pull-id pagetree)
-          title (first-child-content-of pagetree :title)
-          pagens (first-child-content-of pagetree :ns)]
-      (if (= pagens "0")
-        (map #(merge (revision-to-metadata %) {:page_id pageid, :title title}) (page-to-revisions pagetree))
-        []))))
+  (let [pageid (first-child-content-of pagetree :id)
+        title (first-child-content-of pagetree :title)
+        pagens (first-child-content-of pagetree :ns)]
+    (revision-metadata-with-page-metadata {:page_ns pagens, :page_id pageid, :page_title title} (page-to-revisions pagetree))))
 
-(defn process-xml-to-db
-  [xml db]
-  (jdbc/with-db-connection [cnxn (str "jdbc:sqlite:" db)]
-    (jdbc/with-db-transaction [txn cnxn]
-      (doseq [rows (map (fn [p] (page-to-revision-metadatas p)) (mediawiki-to-pages (parse-xml xml)))]
-        (doseq [row rows]
-          (jdbc/insert! txn (if ONLYTEXT "revision_texts" "revisions") row :transaction? false))))))
+(defn process-xml
+  []
+  (doseq [rows (map page-to-revision-metadatas (mediawiki-to-pages (clojure.data.xml/parse *in*)))]
+    (doseq [row rows]
+      (println (json/write-str row)))))
 
-(defn -main
-  [xml db]
-  (process-xml-to-db xml db))
+(def -main process-xml)
 
